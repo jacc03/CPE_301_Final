@@ -35,12 +35,42 @@ volatile unsigned char* port_l = (unsigned char*) 0x10B;
 volatile unsigned char* ddr_l = (unsigned char*) 0x10A; 
 volatile unsigned char* pin_l = (unsigned char*) 0x109; 
 
-void setup() {
-  // put your setup code here, to run once:
+int state = 0;
+/*
+states:
+0-disabled
+1- idle
+2- Run
+999-ERROR
+*/
+
+void setup() 
+{
 
 }
 
-void loop() {
+void loop() 
+{
   // put your main code here, to run repeatedly:
 
+}
+
+void disabled()
+{
+
+}
+
+void idle()
+{
+  
+}
+
+void Run() //CAPTAL R
+{
+  
+}
+
+void error() 
+{
+  
 }
