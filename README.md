@@ -41,11 +41,21 @@ int state = 0;
 1- Idle
 2- Running
 999-ERROR
+
+Start button: D22 AKA PA0 INPUT
+Stop button: D23 AKA PA1 INPUT
+Reset button: D24 AKA PA2 INPUT
+LED R: D25 AKA PA3
+LED G: D26 AKA PA4
+LED B: D27 AKA PA5
 */
 
 void setup() 
 {
-
+  *ddr_a &= 0xF8;   //Set DDRA0-DDRA2 to 0(input) using &= 1111 1000 which is 0xF8
+  //D22-D24 Default State (not pressed) is HIGH
+  *port_a |= 0x07;  //Set PORTA0-PORTA2 to 1(pullup resistor) using |= 0000 0111 which is 0x07
+  *ddr_a |= 0x38;   //Set DDRA3-DDRA5 to 1(output) using |= 0011 1000 which is 0x38
 }
 
 void loop() 
@@ -65,20 +75,42 @@ void loop()
       state=error();
       break;
     default:
-    
     break;
   }
-
+  if(state != 0)
+  {
+  
+  }
 }
 
 int disabled()
 {
-
+  yellow();
+  //if A0(Start Button) HIGH(not pressed) 0000 0001
+  if (*pin_a & 0x01)
+  {
+  }
+  else //A0(Start Button) LOW(pressed)
+  {
+    nocolor();
+    return 1;
+  }
+  return 0;
 }
 
 int idle()
 {
-  
+  green();
+  //if A1(Stop Button) HIGH(not pressed) 0000 0010
+  if (*pin_a & 0x02)
+  {
+  }
+  else //A1(Stop Button) LOW(pressed)
+  {
+    nocolor();
+    return 0;
+  }
+  return 1;
 }
 
 int Run() //CAPTAL R
@@ -87,6 +119,46 @@ int Run() //CAPTAL R
 }
 
 int error() 
+{
+  
+}
+
+void red()
+{
+  //DRIVE PORTA3(r) HIGH, use 0000 1000 = 08 and |
+  *port_a |= 0x08;
+}
+
+void green()
+{
+  //DRIVE PORTA4(g) HIGH, use 0001 0000 = 10 and |
+  *port_a |= 0x10;
+}
+
+void blue()
+{
+  //DRIVE PORTA5(B) HIGH, use 0010 0000 = 20 and |
+  *port_a |= 0x20;
+}
+
+void yellow()
+{
+  red();
+  green();
+}
+
+void nocolor() //Reset LED
+{
+  //DRIVE PORTA3-PORTA5 LOW (LED OFF), use 1100 0111 = C7 and &
+  *port_a &= 0xC7;
+}
+
+void fanon()
+{
+  
+}
+
+void fanoff()
 {
   
 }
