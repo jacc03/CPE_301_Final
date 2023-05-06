@@ -35,7 +35,36 @@ volatile unsigned char* port_l = (unsigned char*) 0x10B;
 volatile unsigned char* ddr_l = (unsigned char*)  0x10A; 
 volatile unsigned char* pin_l = (unsigned char*)  0x109; 
 
+volatile unsigned char *myUCSR0A = (unsigned char *)0x00C0;
+volatile unsigned char *myUCSR0B = (unsigned char *)0x00C1;
+volatile unsigned char *myUCSR0C = (unsigned char *)0x00C2;
+volatile unsigned int  *myUBRR0  = (unsigned int *) 0x00C4;
+volatile unsigned char *myUDR0   = (unsigned char *)0x00C6;
+ 
+volatile unsigned char* my_ADMUX = (unsigned char*) 0x7C;
+volatile unsigned char* my_ADCSRB = (unsigned char*) 0x7B;
+volatile unsigned char* my_ADCSRA = (unsigned char*) 0x7A;
+volatile unsigned int* my_ADC_DATA = (unsigned int*) 0x78;
+
+#define RDA 0x80
+#define TBE 0x20
+  
+unsigned int voltage = 0;
+
 int state = 0;
+
+int pin1 = 3; //IN1
+int pin2 = 4;
+int pin3 = 5;
+int pin4 = 6; //IN4
+
+int pole1[] = {0,0,0,0, 0,1,1,1, 0};
+int pole2[] = {0,0,0,1, 1,1,0,0, 0};
+int pole3[] = {0,1,1,1, 0,0,0,0, 0};
+int pole4[] = {1,1,0,0, 0,0,0,1, 0};
+
+int stepMotor = 0;
+int dirStatus = 3;
 /*states:
 0-Disabled
 1- Idle
@@ -45,17 +74,31 @@ int state = 0;
 Start button: D22 AKA PA0 INPUT
 Stop button: D23 AKA PA1 INPUT
 Reset button: D24 AKA PA2 INPUT
-LED R: D25 AKA PA3
-LED G: D26 AKA PA4
-LED B: D27 AKA PA5
+LED R: D25 AKA PA3 OUT
+LED G: D26 AKA PA4 OUT
+LED B: D27 AKA PA5 OUT
+CW stepper button: D28 PA6 INPUT
+CCW stepper button: D29 PA7 INPUT
+
 */
 
 void setup() 
 {
+  //pinModes for stepper motor
+  pinMode(pin1, OUTPUT);
+  pinMode(pin2, OUTPUT);
+  pinMode(pin3, OUTPUT);
+  pinMode(pin4, OUTPUT);  
+  
   *ddr_a &= 0xF8;   //Set DDRA0-DDRA2 to 0(input) using &= 1111 1000 which is 0xF8
   //D22-D24 Default State (not pressed) is HIGH
   *port_a |= 0x07;  //Set PORTA0-PORTA2 to 1(pullup resistor) using |= 0000 0111 which is 0x07
   *ddr_a |= 0x38;   //Set DDRA3-DDRA5 to 1(output) using |= 0011 1000 which is 0x38
+
+  *ddr_a &= 0x3F; //Set DDRA6-DDRA7 to 0(input) using &= 0011 1111 which is 0x3F
+  *port_a |= 0xC0; //Set PORTA6-PORTA7 to 1(pullup resistor) using |= 1100 0000 which is 0xC0
+  Serial.begin(9600);
+  
 }
 
 void loop() 
@@ -79,8 +122,10 @@ void loop()
   }
   if(state != 0)
   {
-  
+    stepper();
+    
   }
+  //Serial.println(state);
 }
 
 int disabled()
@@ -162,3 +207,67 @@ void fanoff()
 {
   
 }
+
+void stepper()
+{
+  //if A7(CCW Button) HIGH(not pressed) 1000 0000
+  if (*pin_a & 0x80)
+  {
+  }
+  else //A7(CCW Button) LOW(pressed)
+  {
+    dirStatus=1;
+  }
+  
+  //if A6(CW Button) HIGH(not pressed) 0100 0000
+  if (*pin_a & 0x40)
+  {
+  }
+  else//A6(CW Button) LOW(pressed)
+  {
+    dirStatus=2;
+  }
+  
+  //If both are HIGH(not pressed)
+  if((*pin_a & 0x40) && (*pin_a & 0x80))
+  {
+    dirStatus = 3;
+  }
+  //If both are low(pressed)
+  if(!(*pin_a & 0x40) && !(*pin_a & 0x80))
+  {
+    dirStatus = 3;
+  }
+  if(dirStatus == 1)
+  {
+  stepMotor++;
+    driveStepper(stepMotor);
+  }
+  else if(dirStatus == 2)
+  {
+    stepMotor--;
+      driveStepper(stepMotor);
+  }
+  else
+  {
+    driveStepper(8);
+  }
+  
+  if(stepMotor > 7)
+  {
+    stepMotor = 0;
+  }
+  if(stepMotor < 0)
+  {
+    stepMotor = 7;
+  }
+}
+
+void driveStepper(int c)  
+{
+  digitalWrite(pin1, pole1[c]);
+  digitalWrite(pin2, pole2[c]);
+  digitalWrite(pin3, pole3[c]);
+  digitalWrite(pin4, pole4[c]);
+}
+
