@@ -2,6 +2,21 @@
 # Group members: Jack Garbe, Alfonso Custodio, Ryan Krysinski
 
 #include <dht.h>
+#include <LiquidCrystal.h>
+#include <RTClib.h>
+#include <Wire.h>
+
+RTC_DS1307 rtc;
+LiquidCrystal lcd(7, 6, 5, 4, 3, 2);
+dht DHT;
+
+#include <dht.h>
+#include <LiquidCrystal.h>
+#include <RTClib.h>
+#include <Wire.h>
+
+RTC_DS1307 rtc;
+LiquidCrystal lcd(7, 6, 5, 4, 3, 2);
 dht DHT;
 
 volatile unsigned char* port_a = (unsigned char*) 0x22; 
@@ -58,19 +73,27 @@ volatile unsigned char *myTIFR1 =  (unsigned char *) 0x36;
 
 int tempC;
 int tempF;
-#define DHT11_PIN 8
+#define DHT11_PIN 51
 
 #define RDA 0x80
 #define TBE 0x20
   
 unsigned int voltage = 0;
 int waterthreshold = 300;
-int tempthreshold = 75;
+int tempthreshold = 80;
 
 int state = 0;
 int water = 0;
 
 int dirStatus = 3;
+int oldDir=3;
+
+char t[32];
+char Disabled[] = "Disabled ";
+char Idle[] = "Idle ";
+char Running[] = "Running ";
+char Error[] = "Error ";
+char To[] = "To ";
 /*states:
 0-Disabled
 1- Idle
@@ -86,13 +109,14 @@ LED B: D27 AKA PA5 OUT
 CW stepper button: D28 PA6 INPUT
 CCW stepper button: D29 PA7 INPUT
 FAN ENABLE: D53 PB0
-
-
-
 */
 
 void setup() 
 {
+  Wire.begin();
+  rtc.begin();
+  rtc.adjust(DateTime(F(__DATE__),F(__TIME__)));
+  lcd.begin(16, 2);
   // setup the UART
   U0init(9600);
   // setup the ADC
@@ -150,15 +174,37 @@ void loop()
   }
   if (state == 2)
   {
+  
     fanon();
   }
   else
   {
     fanoff();
   }
+  //DateTime now = rtc.now();
+  //sprintf(t, "%02d:%02d:%02d %02d/%02d/%02d", now.hour(), now.minute(), now.second(), now.day(), now.month(), now.year());  
+  //printTime();
+  //delay(1000);
   //Serial.println(state);
+ 
 }
 
+void printTime()
+{
+  DateTime now = rtc.now();
+  sprintf(t, "%02d:%02d:%02d %02d/%02d/%02d", now.hour(), now.minute(), now.second(), now.day(), now.month(), now.year());  
+  printString(t);
+  U0putchar('\n');
+}
+
+void printString(char str[])
+{
+  int len = strlen(str);
+  for(int i=0;i<len;i++)
+  {
+    U0putchar(str[i]);
+  }
+}
 int temphum()
 {
   int chk = DHT.read11(DHT11_PIN);
@@ -173,7 +219,7 @@ int temphum()
   tempFs=tempFs-(d2a*10);
   unsigned char d1 = tempFs/1 + '0';
   
-  /* DISPLAY TEMP AND HIMIDITY TO 
+  /*DISPLAY TEMP AND HIMIDITY TO 
   tempFs=tempF;
   U0putchar('T');
   U0putchar('E');
@@ -219,13 +265,37 @@ int temphum()
   U0putchar('\n');
   */
   
+  lcd.setCursor(0, 0);
+  lcd.print("Temperature: ");
+  lcd.print(tempF);
+
+  int humi=DHT.humidity;
+  lcd.setCursor(0, 1);
+  lcd.print("Humidity: ");
+  lcd.print(humi);
+
+
+  //lcd.clear();
+  
   if((state == 1) && (tempF>tempthreshold))
   {
+    printString(Idle);
+    printString(To);
+    printString(Running);
+    printTime();
+    printString("Fan On ");
+    printTime();
     nocolor();
     return 2;
   }
   if((state==2) && (tempF <= tempthreshold))
   {
+    printString(Running);
+    printString(To);
+    printString(Idle);
+    printTime();
+    printString("Fan Off ");
+    printTime();
     nocolor();
     return 1;
   }
@@ -259,8 +329,9 @@ int waterlevel()
 
   return d3a*1000 + d2a*100 + d1a*10 +d0a;
 }
-int disabled()
+int disabled() //0
 {
+  lcd.clear();
   yellow();
   //if A0(Start Button) HIGH(not pressed) 0000 0001
   if (*pin_a & 0x01)
@@ -268,6 +339,10 @@ int disabled()
   }
   else //A0(Start Button) LOW(pressed)
   {
+    printString(Disabled);
+    printString(To);
+    printString(Idle);
+    printTime();
     nocolor();
     return 1;
   }
@@ -280,7 +355,12 @@ int idle()
   water=waterlevel();
   if(water<waterthreshold)
   {
+    printString(Idle);
+    printString(To);
+    printString(Error);
+    printTime();
     nocolor();
+    lcd.clear();
     return 999;
   }
   //if A1(Stop Button) HIGH(not pressed) 0000 0010
@@ -290,6 +370,10 @@ int idle()
   else //A1(Stop Button) LOW(pressed)
   {
     nocolor();
+    printString(Idle);
+    printString(To);
+    printString(Disabled);
+    printTime();
     return 0;
   }
   return 1;
@@ -301,7 +385,14 @@ int Run() //CAPTAL R
   water=waterlevel();
   if(water<waterthreshold)
   {
+    printString(Running);
+    printString(To);
+    printString(Error);
+    printTime();
+    printString("Fan Off ");
+    printTime();
     nocolor();
+    lcd.clear();
     return 999;
   }
   //if A1(Stop Button) HIGH(not pressed) 0000 0010
@@ -310,6 +401,12 @@ int Run() //CAPTAL R
   }
   else //A1(Stop Button) LOW(pressed)
   {
+    printString(Running);
+    printString(To);
+    printString(Disabled);
+    printTime();
+    printString("Fan Off ");
+    printTime();
     nocolor();
     return 0;
   }
@@ -318,6 +415,8 @@ int Run() //CAPTAL R
 
 int error() 
 {
+  lcd.setCursor(0, 0);
+  lcd.print("ERROR: REFILL");
   red();
   //if A1(Stop Button) HIGH(not pressed) 0000 0010
   if (*pin_a & 0x02)
@@ -325,6 +424,10 @@ int error()
   }
   else //A1(Stop Button) LOW(pressed)
   {
+    printString(Error);
+    printString(To);
+    printString(Disabled);
+    printTime();
     nocolor();
     return 0;
   }
@@ -333,8 +436,12 @@ int error()
   if (*pin_c & 0x80)
   {
   }
-  else //A1(Stop Button) LOW(pressed)
+  else //A1(RESET Button) LOW(pressed)
   {
+    printString(Error);
+    printString(To);
+    printString(Idle);
+    printTime();
     nocolor();
     return 1;
   }
@@ -411,6 +518,18 @@ void stepper()
   {
     dirStatus = 3;
   }
+
+  if((oldDir == 1) && (dirStatus == 3))
+  {
+    printString("Stepper Motor CCW Adjustment ");
+    printTime();
+  }
+  if((oldDir == 2) && (dirStatus==3))
+  {
+    printString("Stepper Motor CW Adjustment ");
+    printTime();    
+  }
+  oldDir=dirStatus;
 
   switch(dirStatus)
   {
@@ -531,6 +650,38 @@ void U0putchar(unsigned char U0pdata)
 {
   while((*myUCSR0A & TBE)==0);
   *myUDR0 = U0pdata;
+}
+
+void setup_timer_regs()
+{
+  // setup the timer control registers
+  *myTCCR1A= 0x00;
+  *myTCCR1B= 0X00;
+  *myTCCR1C= 0x00;
+  
+  // reset the TOV flag
+  *myTIFR1 |= 0x01;
+  
+  // enable the TOV interrupt
+  *myTIMSK1 |= 0x01;
+}
+
+
+// TIMER OVERFLOW ISR
+ISR(TIMER1_OVF_vect)
+{
+  // Stop the Timer
+  *myTCCR1B &=0xF8;
+  // Load the Count
+  *myTCNT1 =  (unsigned int) (65535 -  (unsigned long) (currentTicks));
+  // Start the Timer
+  *myTCCR1B |=0x01;
+  // if it's not the STOP amount
+  if(currentTicks != 65535)
+  {
+    // XOR to toggle PB6
+    *portB ^= 0x40;
+  }
 }
 
 void delay1ms(unsigned int numOfms) //delay in ms (like delay)
