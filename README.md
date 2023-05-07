@@ -49,6 +49,13 @@ volatile unsigned char* my_ADCSRB = (unsigned char*) 0x7B;
 volatile unsigned char* my_ADCSRA = (unsigned char*) 0x7A;
 volatile unsigned int* my_ADC_DATA = (unsigned int*) 0x78;
 
+volatile unsigned char *myTCCR1A = (unsigned char *) 0x80;
+volatile unsigned char *myTCCR1B = (unsigned char *) 0x81;
+volatile unsigned char *myTCCR1C = (unsigned char *) 0x82;
+volatile unsigned char *myTIMSK1 = (unsigned char *) 0x6F;
+volatile unsigned int  *myTCNT1  = (unsigned  int *) 0x84;
+volatile unsigned char *myTIFR1 =  (unsigned char *) 0x36;
+
 int tempC;
 int tempF;
 #define DHT11_PIN 8
@@ -63,12 +70,6 @@ int tempthreshold = 75;
 int state = 0;
 int water = 0;
 
-int pin1 = 10; //IN1 D10 PB4
-int pin2 = 11; //    D11
-int pin3 = 12; //    D12
-int pin4 = 13; //IN4 D13 PB7
-
-int stepMotor = 0;
 int dirStatus = 3;
 /*states:
 0-Disabled
@@ -84,6 +85,9 @@ LED G: D26 AKA PA4 OUT
 LED B: D27 AKA PA5 OUT
 CW stepper button: D28 PA6 INPUT
 CCW stepper button: D29 PA7 INPUT
+FAN ENABLE: D53 PB0
+
+
 
 */
 
@@ -96,6 +100,9 @@ void setup()
   
   //pinModes for STEPPER motor
   *ddr_b |= 0xF0;   //Set DDRB4-DDRB7 to 1(output) using |= 1111 0000 which is 0xF0
+
+  //pinModes for fan motor
+  *ddr_b |= 0x01;   //Set DDRB0 to 1(output) using |= 0000 0001 which is 0x01
   
   /*pinMode(pin1, OUTPUT);
   pinMode(pin2, OUTPUT);
@@ -111,9 +118,7 @@ void setup()
   *port_a |= 0xC0; //Set PORTA6-PORTA7 to 1(pullup resistor) using |= 1100 0000 which is 0xC0
 
   *ddr_c &= 0x7F; //Set DDRC7 0(input) using &= 0111 1111 which is 0x7F
-  *port_c |= 0x80; //Set PORTC7 to 1(pullup resistor) using |= 1000 0000 which is 0x80
-  Serial.begin(9600);
-  
+  *port_c |= 0x80; //Set PORTC7 to 1(pullup resistor) using |= 1000 0000 which is 0x80  
 }
 
 void loop() 
@@ -143,7 +148,15 @@ void loop()
       state=temphum();
     }
   }
-  Serial.println(state);
+  if (state == 2)
+  {
+    fanon();
+  }
+  else
+  {
+    fanoff();
+  }
+  //Serial.println(state);
 }
 
 int temphum()
@@ -151,10 +164,61 @@ int temphum()
   int chk = DHT.read11(DHT11_PIN);
   tempC=DHT.temperature;
   tempF=(tempC*1.8) + 32;
-  Serial.print("Temperature = ");
-  Serial.println(tempF);
-  Serial.print("Humidity = ");
-  Serial.println(DHT.humidity);
+  int tempFs=tempF;
+  unsigned char d3 = tempFs/100 + '0';
+  int d3a=tempFs/100;
+  tempFs=tempFs-(d3a*100);
+  unsigned char d2 = tempFs/10 + '0';
+  int d2a=tempFs/10;
+  tempFs=tempFs-(d2a*10);
+  unsigned char d1 = tempFs/1 + '0';
+  
+  /* DISPLAY TEMP AND HIMIDITY TO 
+  tempFs=tempF;
+  U0putchar('T');
+  U0putchar('E');
+  U0putchar('M');
+  U0putchar('P');
+  U0putchar('E');
+  U0putchar('R');
+  U0putchar('A');
+  U0putchar('T');
+  U0putchar('U');
+  U0putchar('R');
+  U0putchar('E');
+  U0putchar(':');
+  U0putchar(' ');
+  U0putchar(d3);
+  U0putchar(d2);
+  U0putchar(d1);
+  U0putchar('\n');
+
+  int humi=DHT.humidity;
+  int humis=humi;
+  d3 = humis/100 + '0';
+  d3a = humis/100;
+  humis=humis-(d3a*100);
+  d2 = humis/10 + '0';
+  d2a=humis/10;
+  humis=humis-(d2a*10);
+  d1 = humis/1 + '0';
+  
+  U0putchar('H');
+  U0putchar('U');
+  U0putchar('M');
+  U0putchar('I');
+  U0putchar('D');
+  U0putchar('I');
+  U0putchar('T');
+  U0putchar('Y');
+  U0putchar(':');
+  U0putchar(' ');
+  U0putchar(d3);
+  U0putchar(d2);
+  U0putchar(d1);
+  U0putchar('\n');
+  */
+  
   if((state == 1) && (tempF>tempthreshold))
   {
     nocolor();
@@ -185,12 +249,13 @@ int waterlevel()
   unsigned char d0 = voltage - (d1a*10) + '0';
   int d0a=voltage;
   
-  
+  /*PRINT WATER LEVEL
   U0putchar(d3);     // echo character
   U0putchar(d2);
   U0putchar(d1);
   U0putchar(d0);
   U0putchar('\n');
+  */
 
   return d3a*1000 + d2a*100 + d1a*10 +d0a;
 }
@@ -308,12 +373,12 @@ void nocolor() //Reset LED
 
 void fanon()
 {
-  
+  *port_b |= 0x01; //DRIVE PORTB0 HIGH, use 0000 0001 =  and |
 }
 
 void fanoff()
 {
-  
+  *port_b &= 0xFE; //DRIVE PORTB0 LOW, use 1111 1110 =  and &
 }
 
 void stepper()
@@ -364,19 +429,19 @@ void stepper()
 void CCW()
 {
   *port_b |= 0x80; //DRIVE PORTB7 HIGH, use 1000 0000 =  and |
-  delay(5);
+  delay1ms(3);
   resetstep();
   
   *port_b |= 0x40; //DRIVE PORTB6 HIGH, use 0100 0000 =  and |
-  delay(5);
+  delay1ms(3);
   resetstep();
   
   *port_b |= 0x20; //DRIVE PORTB5 HIGH, use 0010 0000 =  and |
-  delay(5);
+  delay1ms(3);
   resetstep();
 
   *port_b |= 0x10; //DRIVE PORTB4 HIGH, use 0001 0000 =  and |
-  delay(5);
+  delay1ms(3);
   resetstep();
 
 }
@@ -384,16 +449,16 @@ void CCW()
 void CW()
 {
   *port_b |= 0x10; //DRIVE PORTB4 HIGH, use 0001 0000 =  and |
-  delay(5);
+  delay1ms(3);
   resetstep(); 
   *port_b |= 0x20; //DRIVE PORTB5 HIGH, use 0010 0000 =  and |
-  delay(5);
+  delay1ms(3);
   resetstep();
   *port_b |= 0x40; //DRIVE PORTB6 HIGH, use 0100 0000 =  and |
-  delay(5);
+  delay1ms(3);
   resetstep();
   *port_b |= 0x80; //DRIVE PORTB7 HIGH, use 1000 0000 =  and |
-  delay(5);
+  delay1ms(3);
   resetstep();
 }
 
@@ -466,4 +531,25 @@ void U0putchar(unsigned char U0pdata)
 {
   while((*myUCSR0A & TBE)==0);
   *myUDR0 = U0pdata;
+}
+
+void delay1ms(unsigned int numOfms) //delay in ms (like delay)
+{
+  for(int i=0;i<numOfms;i++)
+  {
+    unsigned int ticks = 16000;
+    // stop the timer
+    *myTCCR1A = 0x00;
+    *myTCCR1B &= 0xF8;
+    // set the counts
+    *myTCNT1 = (unsigned int) (65536 - ticks);
+    // start the timer
+    * myTCCR1B |= 0b00000001;
+    // wait for overflow
+    while((*myTIFR1 & 0x01)==0); 
+    // stop the timer
+    *myTCCR1B &= 0xF8;  
+    // reset TOV           
+    *myTIFR1 |= 0x01;
+  }
 }
