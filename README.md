@@ -10,15 +10,6 @@ RTC_DS1307 rtc;
 LiquidCrystal lcd(7, 6, 5, 4, 3, 2);
 dht DHT;
 
-#include <dht.h>
-#include <LiquidCrystal.h>
-#include <RTClib.h>
-#include <Wire.h>
-
-RTC_DS1307 rtc;
-LiquidCrystal lcd(7, 6, 5, 4, 3, 2);
-dht DHT;
-
 volatile unsigned char* port_a = (unsigned char*) 0x22; 
 volatile unsigned char* ddr_a = (unsigned char*)  0x21; 
 volatile unsigned char* pin_a = (unsigned char*)  0x20; 
@@ -94,6 +85,13 @@ char Idle[] = "Idle ";
 char Running[] = "Running ";
 char Error[] = "Error ";
 char To[] = "To ";
+char FanOn[] = "Fan On ";
+char FanOff[] = "Fan Off ";
+char Counter[] = "Stepper Motor CCW Adjustment ";
+char Clock[]= "Stepper Motor CW Adjustment ";
+
+unsigned int currentTicks;
+unsigned int timer_running;
 /*states:
 0-Disabled
 1- Idle
@@ -108,7 +106,7 @@ LED G: D26 AKA PA4 OUT
 LED B: D27 AKA PA5 OUT
 CW stepper button: D28 PA6 INPUT
 CCW stepper button: D29 PA7 INPUT
-FAN ENABLE: D53 PB0
+FAN ENABLE: D53 PB0 OUT
 */
 
 void setup() 
@@ -283,7 +281,7 @@ int temphum()
     printString(To);
     printString(Running);
     printTime();
-    printString("Fan On ");
+    printString(FanOn);
     printTime();
     nocolor();
     return 2;
@@ -294,7 +292,7 @@ int temphum()
     printString(To);
     printString(Idle);
     printTime();
-    printString("Fan Off ");
+    printString(FanOff);
     printTime();
     nocolor();
     return 1;
@@ -389,7 +387,7 @@ int Run() //CAPTAL R
     printString(To);
     printString(Error);
     printTime();
-    printString("Fan Off ");
+    printString(FanOff);
     printTime();
     nocolor();
     lcd.clear();
@@ -405,7 +403,7 @@ int Run() //CAPTAL R
     printString(To);
     printString(Disabled);
     printTime();
-    printString("Fan Off ");
+    printString(FanOff);
     printTime();
     nocolor();
     return 0;
@@ -521,12 +519,12 @@ void stepper()
 
   if((oldDir == 1) && (dirStatus == 3))
   {
-    printString("Stepper Motor CCW Adjustment ");
+    printString(Counter);
     printTime();
   }
   if((oldDir == 2) && (dirStatus==3))
   {
-    printString("Stepper Motor CW Adjustment ");
+    printString(Clock);
     printTime();    
   }
   oldDir=dirStatus;
@@ -680,7 +678,7 @@ ISR(TIMER1_OVF_vect)
   if(currentTicks != 65535)
   {
     // XOR to toggle PB6
-    *portB ^= 0x40;
+    *port_b ^= 0x40;
   }
 }
 
